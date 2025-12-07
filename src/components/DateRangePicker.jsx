@@ -15,28 +15,43 @@ export default function DateRangePicker({ value, onChange, className = '' }) {
 
   const handleQuickSelect = (option) => {
     const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    // Get local date string (YYYY-MM-DD) without timezone conversion
+    const todayStr = today.getFullYear() + '-' + 
+      String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+      String(today.getDate()).padStart(2, '0')
 
     if (option.custom) {
       // This Month
       const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
       const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0)
       onChange({
-        startDate: firstDay.toISOString().split('T')[0],
-        endDate: lastDay.toISOString().split('T')[0],
+        startDate: firstDay.getFullYear() + '-' + 
+          String(firstDay.getMonth() + 1).padStart(2, '0') + '-' + 
+          String(firstDay.getDate()).padStart(2, '0'),
+        endDate: lastDay.getFullYear() + '-' + 
+          String(lastDay.getMonth() + 1).padStart(2, '0') + '-' + 
+          String(lastDay.getDate()).padStart(2, '0'),
       })
     } else {
+      // For "Today", "Last 7 days", "Last 30 days"
       const start = new Date(today)
       start.setDate(start.getDate() + option.days)
+      
+      const startStr = start.getFullYear() + '-' + 
+        String(start.getMonth() + 1).padStart(2, '0') + '-' + 
+        String(start.getDate()).padStart(2, '0')
+      
+      // End date is always today (to include all sales made today)
       onChange({
-        startDate: start.toISOString().split('T')[0],
-        endDate: today.toISOString().split('T')[0],
+        startDate: startStr,
+        endDate: todayStr,
       })
     }
   }
 
   const handleApply = () => {
     if (startDate && endDate) {
+      // Pass dates as-is - the service will handle time conversion
       onChange({ startDate, endDate })
     }
   }

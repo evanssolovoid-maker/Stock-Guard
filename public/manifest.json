@@ -1,0 +1,16 @@
+{
+  "name": "StockGuard",
+  "short_name": "StockGuard",
+  "description": "Inventory & Sales Tracking System",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "theme_color": "#2563eb",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "start_url": "/"
+}

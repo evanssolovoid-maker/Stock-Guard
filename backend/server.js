@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { createClient } = require("@supabase/supabase-js");
+const nodemailer = require("nodemailer");
 
 // Initialize Supabase (with error handling)
 let supabase = null;
@@ -40,6 +41,38 @@ if (process.env.AT_API_KEY && process.env.AT_USERNAME) {
   }
 }
 
+// Initialize Nodemailer (if credentials provided)
+let emailTransporter = null;
+if (
+  process.env.EMAIL_HOST &&
+  process.env.EMAIL_PORT &&
+  process.env.EMAIL_USER &&
+  process.env.EMAIL_PASS
+) {
+  try {
+    emailTransporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST,
+      port: parseInt(process.env.EMAIL_PORT, 10),
+      secure:
+        process.env.EMAIL_PORT === "465" || process.env.EMAIL_SECURE === "true",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+    console.log("✅ Email transporter initialized successfully");
+  } catch (error) {
+    console.error("❌ Failed to initialize email transporter:", error.message);
+  }
+} else {
+  console.warn(
+    "⚠️  Email credentials not set. Email notifications will not work."
+  );
+  console.warn(
+    "   Set EMAIL_HOST, EMAIL_PORT, EMAIL_USER, and EMAIL_PASS in Railway Variables."
+  );
+}
+
 const app = express();
 app.use(express.json());
 app.use(
@@ -55,6 +88,7 @@ app.get("/health", (req, res) => {
     timestamp: new Date().toISOString(),
     supabase: supabase ? "connected" : "not configured",
     africastalking: africastalking ? "configured" : "not configured",
+    email: emailTransporter ? "configured" : "not configured",
   });
 });
 
@@ -67,6 +101,7 @@ app.get("/", (req, res) => {
       health: "/health",
       notifyOwner: "POST /api/notify-owner",
       testSMS: "POST /api/test-sms",
+      testEmail: "POST /api/test-email",
     },
   });
 });
@@ -98,7 +133,7 @@ app.post("/api/notify-owner", async (req, res) => {
           product:products(name, unit_of_measure)
         ),
         worker:user_profiles!sales_worker_id_fkey(id, username, business_name, phone_number),
-        owner:user_profiles!sales_owner_id_fkey(id, phone_number, sms_notifications, sms_threshold)
+        owner:user_profiles!sales_owner_id_fkey(id, phone_number, email, sms_notifications, sms_threshold, email_notifications, email_threshold)
       `
       )
       .eq("id", saleId)
@@ -135,7 +170,7 @@ app.post("/api/notify-owner", async (req, res) => {
     // Check threshold (use final_total instead of total_amount)
     const saleAmount = parseFloat(sale.final_total || 0);
     const threshold = parseFloat(owner.sms_threshold || 0);
-    
+
     if (threshold > 0 && saleAmount < threshold) {
       return res.json({
         success: true,
@@ -148,9 +183,9 @@ app.post("/api/notify-owner", async (req, res) => {
     const items = sale.items || [];
     const workerName =
       sale.worker?.business_name || sale.worker?.username || "Worker";
-    
+
     let message = "";
-    
+
     if (items.length === 0) {
       // Fallback if no items found
       message = `New sale: UGX ${saleAmount.toLocaleString()} by ${workerName}. - StockGuard`;
@@ -162,14 +197,19 @@ app.post("/api/notify-owner", async (req, res) => {
       message = `Sale: ${productName} x${quantity} = UGX ${saleAmount.toLocaleString()} by ${workerName}. - StockGuard`;
     } else {
       // Multiple items - summarize
-      const totalItems = items.reduce((sum, item) => sum + (item.quantity_sold || 0), 0);
+      const totalItems = items.reduce(
+        (sum, item) => sum + (item.quantity_sold || 0),
+        0
+      );
       if (items.length <= 3) {
         // List all items if 3 or fewer
-        const itemList = items.map(item => {
-          const qty = item.quantity_sold || 0;
-          const name = item.product?.name || "Item";
-          return `${name}(${qty})`;
-        }).join(", ");
+        const itemList = items
+          .map((item) => {
+            const qty = item.quantity_sold || 0;
+            const name = item.product?.name || "Item";
+            return `${name}(${qty})`;
+          })
+          .join(", ");
         message = `Sale: ${itemList} = UGX ${saleAmount.toLocaleString()} by ${workerName}. - StockGuard`;
       } else {
         // Summarize if more than 3 items
@@ -178,6 +218,7 @@ app.post("/api/notify-owner", async (req, res) => {
     }
 
     // Send SMS if Africa's Talking is configured
+    let smsSent = false;
     if (africastalking && owner.phone_number) {
       try {
         const result = await africastalking.SMS.send({
@@ -187,29 +228,214 @@ app.post("/api/notify-owner", async (req, res) => {
         });
 
         console.log("SMS sent successfully:", result);
-        return res.json({
-          success: true,
-          messageId: result.SMSMessageData?.Recipients?.[0]?.messageId,
-          message: message,
-        });
+        smsSent = true;
       } catch (smsError) {
         console.error("SMS error:", smsError);
-        return res
-          .status(500)
-          .json({ error: "Failed to send SMS", details: smsError.message });
       }
-    } else {
-      // SMS service not configured, log the message
-      console.log("SMS would be sent:", message, "to:", owner.phone_number);
+    }
+
+    // Send Email if email notifications are enabled
+    let emailSent = false;
+    if (owner.email_notifications && owner.email && emailTransporter) {
+      // Check email threshold
+      const emailThreshold = parseFloat(owner.email_threshold || 0);
+      if (emailThreshold === 0 || saleAmount >= emailThreshold) {
+        try {
+          // Format email content
+          const items = sale.items || [];
+          const workerName =
+            sale.worker?.business_name || sale.worker?.username || "Worker";
+
+          let emailHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #2563eb;">New Sale Notification - StockGuard</h2>
+              <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <p style="margin: 10px 0;"><strong>Sale Amount:</strong> UGX ${saleAmount.toLocaleString()}</p>
+                <p style="margin: 10px 0;"><strong>Worker:</strong> ${workerName}</p>
+                <p style="margin: 10px 0;"><strong>Date:</strong> ${new Date(
+                  sale.created_at
+                ).toLocaleString()}</p>
+              </div>
+          `;
+
+          if (items.length > 0) {
+            emailHtml += `
+              <h3 style="color: #374151; margin-top: 30px;">Items Sold:</h3>
+              <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                <thead>
+                  <tr style="background-color: #e5e7eb;">
+                    <th style="padding: 10px; text-align: left; border: 1px solid #d1d5db;">Product</th>
+                    <th style="padding: 10px; text-align: right; border: 1px solid #d1d5db;">Quantity</th>
+                    <th style="padding: 10px; text-align: right; border: 1px solid #d1d5db;">Price</th>
+                  </tr>
+                </thead>
+                <tbody>
+            `;
+
+            items.forEach((item) => {
+              const productName = item.product?.name || "Product";
+              const quantity = item.quantity_sold || 0;
+              const price = parseFloat(item.unit_price || 0).toLocaleString();
+              emailHtml += `
+                <tr>
+                  <td style="padding: 10px; border: 1px solid #d1d5db;">${productName}</td>
+                  <td style="padding: 10px; text-align: right; border: 1px solid #d1d5db;">${quantity}</td>
+                  <td style="padding: 10px; text-align: right; border: 1px solid #d1d5db;">UGX ${price}</td>
+                </tr>
+              `;
+            });
+
+            emailHtml += `
+                </tbody>
+              </table>
+            `;
+          }
+
+          emailHtml += `
+              <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">
+                This is an automated notification from StockGuard.
+              </p>
+            </div>
+          `;
+
+          const emailText = `New Sale: UGX ${saleAmount.toLocaleString()} by ${workerName}\n\n${items
+            .map(
+              (item) =>
+                `${item.product?.name || "Product"} x${item.quantity_sold || 0}`
+            )
+            .join("\n")}\n\nDate: ${new Date(
+            sale.created_at
+          ).toLocaleString()}`;
+
+          const emailResult = await emailTransporter.sendMail({
+            from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+            to: owner.email,
+            subject: `New Sale: UGX ${saleAmount.toLocaleString()} - StockGuard`,
+            text: emailText,
+            html: emailHtml,
+          });
+
+          console.log("Email sent successfully:", emailResult.messageId);
+          emailSent = true;
+        } catch (emailError) {
+          console.error("Email error:", emailError);
+        }
+      }
+    }
+
+    // Return response
+    return res.json({
+      success: true,
+      sms: smsSent
+        ? { sent: true }
+        : { sent: false, reason: "SMS service not configured or disabled" },
+      email: emailSent
+        ? { sent: true }
+        : { sent: false, reason: "Email service not configured or disabled" },
+      message,
+    });
+  } catch (error) {
+    console.error("Notification error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Test Email endpoint
+app.post("/api/test-email", async (req, res) => {
+  const { ownerId } = req.body;
+
+  if (!ownerId) {
+    return res.status(400).json({ error: "Owner ID is required" });
+  }
+
+  if (!supabase) {
+    return res.status(503).json({
+      error: "Supabase not configured",
+      message: "SUPABASE_URL and SUPABASE_SERVICE_KEY must be set",
+    });
+  }
+
+  try {
+    const { data: owner, error } = await supabase
+      .from("user_profiles")
+      .select("email, email_notifications, email_threshold")
+      .eq("id", ownerId)
+      .single();
+
+    if (error || !owner) {
+      console.error("Owner fetch error:", error);
+      return res.status(404).json({ error: "Owner not found" });
+    }
+
+    if (!owner.email) {
+      return res.json({
+        success: false,
+        skipped: true,
+        reason: "Email address not set in your profile",
+        error:
+          "Please add your email address in Settings to receive email notifications",
+      });
+    }
+
+    // Check if email notifications are enabled
+    if (!owner.email_notifications) {
+      return res.json({
+        success: false,
+        skipped: true,
+        reason: "Email notifications are disabled",
+        error: "Please enable email notifications in Settings first",
+      });
+    }
+
+    if (!emailTransporter) {
       return res.json({
         success: true,
         skipped: true,
-        reason: "SMS service not configured",
-        message,
+        reason: "Email service not configured",
+        message: "Email service is not configured on the server",
+      });
+    }
+
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2563eb;">Test Email from StockGuard</h2>
+        <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <p>This is a test email to verify that your email notifications are working correctly.</p>
+          <p>If you received this email, your email notification settings are properly configured!</p>
+        </div>
+        <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">
+          This is an automated test notification from StockGuard.
+        </p>
+      </div>
+    `;
+
+    const emailText = `Test Email from StockGuard\n\nThis is a test email to verify that your email notifications are working correctly.\n\nIf you received this email, your email notification settings are properly configured!`;
+
+    try {
+      const result = await emailTransporter.sendMail({
+        from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+        to: owner.email,
+        subject: "Test Email - StockGuard",
+        text: emailText,
+        html: emailHtml,
+      });
+
+      console.log("Test email sent successfully:", result.messageId);
+      return res.json({
+        success: true,
+        messageId: result.messageId,
+        message: "Test email sent successfully!",
+      });
+    } catch (emailError) {
+      console.error("Test email sending error:", emailError);
+      return res.status(500).json({
+        success: false,
+        error: "Failed to send test email",
+        details: emailError.message,
       });
     }
   } catch (error) {
-    console.error("Notification error:", error);
+    console.error("Test email error:", error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -246,7 +472,8 @@ app.post("/api/test-sms", async (req, res) => {
         success: false,
         skipped: true,
         reason: "Phone number not set in your profile",
-        error: "Please add your phone number in Settings to receive SMS notifications",
+        error:
+          "Please add your phone number in Settings to receive SMS notifications",
       });
     }
 
@@ -290,7 +517,8 @@ app.post("/api/test-sms", async (req, res) => {
         success: true,
         skipped: true,
         reason: "SMS service not configured",
-        message: "SMS service (Africa's Talking) is not configured on the server",
+        message:
+          "SMS service (Africa's Talking) is not configured on the server",
       });
     }
   } catch (error) {
@@ -327,6 +555,11 @@ const server = app.listen(PORT, () => {
       africastalking ? "Configured" : "Not configured (optional)"
     }`
   );
+  console.log(
+    `✅ Email Service: ${
+      emailTransporter ? "Configured" : "Not configured (optional)"
+    }`
+  );
   console.log(`✅ Server started successfully!`);
 });
 
@@ -359,6 +592,3 @@ process.on("unhandledRejection", (reason, promise) => {
   }
   process.exit(1);
 });
-
-
-

@@ -22,6 +22,7 @@ export default function LogSale() {
   const [saleData, setSaleData] = useState(null)
   const [ownerId, setOwnerId] = useState(null)
   const [ownerSettings, setOwnerSettings] = useState(null)
+  const [amountGiven, setAmountGiven] = useState('')
 
   // Get owner ID and load products
   useEffect(() => {
@@ -94,6 +95,18 @@ export default function LogSale() {
   }, [subtotal, ownerSettings])
 
   const finalTotal = subtotal - discount
+
+  // Calculate change
+  const change = useMemo(() => {
+    const given = parseFloat(amountGiven) || 0
+    const total = finalTotal
+    return given >= total ? given - total : 0
+  }, [amountGiven, finalTotal])
+
+  const isAmountSufficient = useMemo(() => {
+    const given = parseFloat(amountGiven) || 0
+    return given >= finalTotal
+  }, [amountGiven, finalTotal])
 
   // Add product to cart
   const addToCart = () => {
@@ -215,11 +228,13 @@ export default function LogSale() {
     setSearchQuery('')
     setSuccess(false)
     setSaleData(null)
+    setAmountGiven('')
     // Reload products to get updated quantities
     if (ownerId) {
       loadProducts(ownerId)
     }
   }
+
 
   const getProductTypeLabel = (product) => {
     if (product.product_type === 'box') {
@@ -616,11 +631,61 @@ export default function LogSale() {
                   </div>
                 </div>
 
+                {/* Amount Given & Change */}
+                <div className="mt-6 space-y-4 pt-4 border-t border-gray-300 dark:border-slate-600">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                      Amount Given
+                    </label>
+                    <input
+                      type="number"
+                      value={amountGiven}
+                      onChange={(e) => setAmountGiven(e.target.value)}
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-50 text-lg font-semibold focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    />
+                  </div>
+
+                  {amountGiven && (
+                    <div className="space-y-2">
+                      {!isAmountSufficient && (
+                        <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                          <p className="text-sm text-red-600 dark:text-red-400 font-medium">
+                            Insufficient amount! Need UGX {(finalTotal - parseFloat(amountGiven || 0)).toLocaleString()} more.
+                          </p>
+                        </div>
+                      )}
+                      
+                      {isAmountSufficient && change > 0 && (
+                        <div className="flex justify-between items-center p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-700">
+                          <span className="text-lg font-semibold text-gray-900 dark:text-slate-50">
+                            Change:
+                          </span>
+                          <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                            UGX {change.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )}
+
+                      {isAmountSufficient && change === 0 && (
+                        <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                          <p className="text-sm text-blue-600 dark:text-blue-400 font-medium text-center">
+                            Exact amount - No change needed
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <Button
                   onClick={submitSale}
                   fullWidth
                   loading={submitting}
-                  className="mt-6 py-4 text-xl"
+                  disabled={!isAmountSufficient}
+                  className="mt-6 py-4 text-xl disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Check className="w-5 h-5 mr-2" />
                   Confirm Sale

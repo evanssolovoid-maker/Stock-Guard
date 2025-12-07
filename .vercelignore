@@ -1,0 +1,28 @@
+# Development files
+dev-all.bat
+dev-all.ps1
+*.local
+
+# Backend (not needed for Vercel deployment)
+backend/
+server.js
+railway.json
+
+# Database files (for reference only)
+database/
+
+# Documentation (optional - you can include these if you want)
+# BUILD_GUIDE.md
+# VERCEL_DEPLOYMENT.md
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

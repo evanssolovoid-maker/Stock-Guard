@@ -26,29 +26,38 @@ A modern, web-based inventory and sales tracking system designed for Ugandan sma
 
 ## Getting Started
 
-### Prerequisites
+For complete setup instructions, see **[BUILD_GUIDE.md](./BUILD_GUIDE.md)**
 
-- Node.js 18+ and npm
-- A Supabase account and project
+### Quick Start
 
-### Installation
+1. **Install dependencies:**
 
-1. Clone the repository:
+   ```bash
+   npm install
+   ```
 
-```bash
-git clone <repository-url>
-cd StoGuard
-```
+2. **Set up Supabase:**
 
-2. Install dependencies:
+   - Create a Supabase project at [supabase.com](https://supabase.com)
+   - Create `.env.local` with your Supabase credentials:
 
-```bash
-npm install
-```
+   ```env
+   VITE_SUPABASE_URL=your-project-url
+   VITE_SUPABASE_ANON_KEY=your-anon-key
+   ```
 
-3. Set up environment variables:
-   - Copy `.env.example` to `.env`
-   - Add your Supabase credentials:
+3. **Run database migration:**
+
+   - In Supabase SQL Editor, run `database/migration-fresh-install.sql`
+
+4. **Start the app:**
+   ```bash
+   npm run dev
+   ```
+
+For detailed instructions, troubleshooting, and complete setup guide, see **[BUILD_GUIDE.md](./BUILD_GUIDE.md)**
+
+- Add your Supabase credentials:
 
 ```env
 VITE_SUPABASE_URL=your_supabase_project_url

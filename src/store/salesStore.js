@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { salesService } from "../services/sales.service";
-import { notificationsService } from "../services/notifications.service";
 import { supabase } from "../services/supabase";
 import toast from "react-hot-toast";
 
@@ -125,13 +124,6 @@ export const useSalesStore = create((set, get) => ({
 
             // Update today's stats
             get().loadTodayStats(ownerId);
-
-            // Show browser notification (checks user preferences)
-            notificationsService.showBrowserNotification(sale, ownerId).catch(
-              (error) => {
-                console.error("Error showing browser notification:", error);
-              }
-            );
           } catch (error) {
             console.error("Error fetching new sale:", error);
           }

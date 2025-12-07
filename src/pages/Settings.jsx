@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Settings as SettingsIcon, Bell, Smartphone, Mail, Save, Users, UserPlus, UserCog, X, Trash2 } from 'lucide-react'
+import { Settings as SettingsIcon, Save, Users, UserPlus, UserCog, X, Trash2, Lock } from 'lucide-react'
 import DashboardLayout from '../components/DashboardLayout'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -15,7 +15,6 @@ export default function Settings() {
   const { user, profile, loadProfile } = useAuth()
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [testingSMS, setTestingSMS] = useState(false)
   
   // Team management states
   const [teamMembers, setTeamMembers] = useState({ managers: [], workers: [] })
@@ -36,21 +35,25 @@ export default function Settings() {
   const [formData, setFormData] = useState({
     businessName: '',
     phoneNumber: '',
-    smsNotifications: false,
-    browserNotifications: false,
-    emailNotifications: false,
-    smsThreshold: 0,
+    email: '',
   })
+
+  // Password change state
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  })
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [passwordErrors, setPasswordErrors] = useState({})
+  const [showPasswordSection, setShowPasswordSection] = useState(false)
 
   useEffect(() => {
     if (profile) {
       setFormData({
         businessName: profile.business_name || '',
         phoneNumber: profile.phone_number || '',
-        smsNotifications: profile.sms_notifications || false,
-        browserNotifications: profile.browser_notifications || false,
-        emailNotifications: profile.email_notifications || false,
-        smsThreshold: parseFloat(profile.sms_threshold || 0),
+        email: profile.email || '',
       })
     }
   }, [profile])
@@ -62,12 +65,6 @@ export default function Settings() {
     }
   }, [user, profile])
 
-  // Request browser notification permission
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission()
-    }
-  }, [])
 
   const handleSave = async () => {
     if (!user) return
@@ -79,10 +76,7 @@ export default function Settings() {
         .update({
           business_name: formData.businessName,
           phone_number: formData.phoneNumber,
-          sms_notifications: formData.smsNotifications,
-          browser_notifications: formData.browserNotifications,
-          email_notifications: formData.emailNotifications,
-          sms_threshold: formData.smsThreshold,
+          email: formData.email,
         })
         .eq('id', user.id)
 
@@ -102,56 +96,77 @@ export default function Settings() {
     }
   }
 
-  const handleTestSMS = async () => {
+  const validatePasswordChange = () => {
+    const errors = {}
+
+    if (!passwordData.currentPassword) {
+      errors.currentPassword = 'Current password is required'
+    }
+
+    if (!passwordData.newPassword) {
+      errors.newPassword = 'New password is required'
+    } else if (passwordData.newPassword.length < 8) {
+      errors.newPassword = 'Password must be at least 8 characters'
+    }
+
+    if (!passwordData.confirmPassword) {
+      errors.confirmPassword = 'Please confirm your new password'
+    } else if (passwordData.newPassword !== passwordData.confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match'
+    }
+
+    if (passwordData.currentPassword === passwordData.newPassword) {
+      errors.newPassword = 'New password must be different from current password'
+    }
+
+    setPasswordErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const handleChangePassword = async () => {
     if (!user) return
 
-    setTestingSMS(true)
+    if (!validatePasswordChange()) {
+      return
+    }
+
+    setChangingPassword(true)
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
-      const response = await fetch(`${backendUrl}/api/test-sms`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ ownerId: user.id }),
+      // Call the database function to update password
+      const { data, error } = await supabase.rpc('update_user_password', {
+        p_user_id: user.id,
+        p_old_password: passwordData.currentPassword,
+        p_new_password: passwordData.newPassword,
       })
 
-      const data = await response.json()
-
-      if (data.success) {
-        if (data.skipped) {
-          toast.success('Test SMS skipped: ' + data.reason)
-        } else {
-          toast.success('Test SMS sent successfully!')
-        }
-      } else {
-        toast.error('Failed to send test SMS: ' + (data.error || 'Unknown error'))
+      if (error) {
+        console.error('Password update error:', error)
+        throw new Error(error.message || 'Failed to update password')
       }
+
+      // Check if password was updated successfully
+      if (data === false || data === null) {
+        throw new Error('Current password is incorrect')
+      }
+
+      // Reset password form
+      setPasswordData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      })
+      setPasswordErrors({})
+      setShowPasswordSection(false)
+
+      toast.success('Password changed successfully!')
     } catch (error) {
-      console.error('Error sending test SMS:', error)
-      toast.error('Failed to send test SMS: ' + error.message)
+      console.error('Error changing password:', error)
+      toast.error(error.message || 'Failed to change password')
     } finally {
-      setTestingSMS(false)
+      setChangingPassword(false)
     }
   }
 
-  const requestBrowserNotificationPermission = async () => {
-    try {
-      const { notificationsService } = await import('../services/notifications.service')
-      const granted = await notificationsService.requestBrowserNotificationPermission()
-      if (granted) {
-        toast.success('Browser notifications enabled!')
-        setFormData({ ...formData, browserNotifications: true })
-        // Auto-save the preference
-        await handleSave()
-      } else {
-        toast.error('Browser notifications permission denied')
-      }
-    } catch (error) {
-      console.error('Error requesting notification permission:', error)
-      toast.error(error.message || 'Failed to request notification permission')
-    }
-  }
 
   // Team Management Functions
   const loadTeamMembers = async () => {
@@ -344,138 +359,108 @@ export default function Settings() {
               onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
               placeholder="+256 XXX XXX XXX"
             />
+            <Input
+              label="Email Address"
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              placeholder="your@email.com"
+            />
           </div>
         </Card>
 
-        {/* Notification Preferences */}
+        {/* Change Password */}
         <Card className="p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Bell className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">
-              Notification Preferences
-            </h2>
-          </div>
-
-          <div className="space-y-6">
-            {/* SMS Notifications */}
-            <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-slate-700">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <Smartphone className="w-5 h-5 text-gray-600 dark:text-slate-400" />
-                  <label className="text-sm font-medium text-gray-900 dark:text-slate-50">
-                    Enable SMS Notifications
-                  </label>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-slate-400">
-                  UGX 50 per SMS
-                </p>
-              </div>
-              <Switch
-                checked={formData.smsNotifications}
-                onChange={(checked) =>
-                  setFormData({ ...formData, smsNotifications: checked })
-                }
-              />
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Lock className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">
+                Change Password
+              </h2>
             </div>
-
-            {/* Browser Notifications */}
-            <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-slate-700">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <Bell className="w-5 h-5 text-gray-600 dark:text-slate-400" />
-                  <label className="text-sm font-medium text-gray-900 dark:text-slate-50">
-                    Enable Browser Notifications
-                  </label>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-slate-400">
-                  Get notified when new sales are made
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {!formData.browserNotifications &&
-                  Notification.permission === 'default' && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={requestBrowserNotificationPermission}
-                    >
-                      Request
-                    </Button>
-                  )}
-                <Switch
-                  checked={formData.browserNotifications}
-                  onChange={(checked) =>
-                    setFormData({ ...formData, browserNotifications: checked })
-                  }
-                  disabled={Notification.permission === 'denied'}
-                />
-              </div>
-            </div>
-
-            {/* Email Notifications (Future) */}
-            <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-slate-700 opacity-50">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <Mail className="w-5 h-5 text-gray-600 dark:text-slate-400" />
-                  <label className="text-sm font-medium text-gray-900 dark:text-slate-50">
-                    Enable Email Notifications
-                  </label>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-slate-400">
-                  Coming soon
-                </p>
-              </div>
-              <Switch
-                checked={false}
-                disabled
-                className="bg-gray-200 dark:bg-slate-700 relative inline-flex h-6 w-11 items-center rounded-full"
-              >
-                <span className="translate-x-1 inline-block h-4 w-4 transform rounded-full bg-white" />
-              </Switch>
-            </div>
-
-            {/* SMS Threshold */}
-            {formData.smsNotifications && (
-              <div className="p-4 rounded-lg bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700">
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                  Only send SMS for sales above:
-                </label>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-gray-600 dark:text-slate-400">UGX</span>
-                  <Input
-                    type="number"
-                    value={formData.smsThreshold}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        smsThreshold: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    min="0"
-                    step="0.01"
-                    className="flex-1"
-                  />
-                </div>
-                <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">
-                  Set to 0 to receive SMS for all sales
-                </p>
-              </div>
-            )}
-
-            {/* Test SMS Button */}
-            {formData.smsNotifications && (
+            {!showPasswordSection && (
               <Button
                 variant="secondary"
-                onClick={handleTestSMS}
-                loading={testingSMS}
-                leadingIcon={Smartphone}
-                fullWidth
+                size="sm"
+                onClick={() => setShowPasswordSection(true)}
               >
-                Send Test SMS
+                Change Password
               </Button>
             )}
           </div>
+
+          {showPasswordSection && (
+            <div className="space-y-4">
+              <Input
+                label="Current Password"
+                type="password"
+                value={passwordData.currentPassword}
+                onChange={(e) =>
+                  setPasswordData({
+                    ...passwordData,
+                    currentPassword: e.target.value,
+                  })
+                }
+                placeholder="Enter current password"
+                error={passwordErrors.currentPassword}
+              />
+
+              <Input
+                label="New Password"
+                type="password"
+                value={passwordData.newPassword}
+                onChange={(e) =>
+                  setPasswordData({
+                    ...passwordData,
+                    newPassword: e.target.value,
+                  })
+                }
+                placeholder="Enter new password (min. 8 characters)"
+                error={passwordErrors.newPassword}
+              />
+
+              <Input
+                label="Confirm New Password"
+                type="password"
+                value={passwordData.confirmPassword}
+                onChange={(e) =>
+                  setPasswordData({
+                    ...passwordData,
+                    confirmPassword: e.target.value,
+                  })
+                }
+                placeholder="Confirm new password"
+                error={passwordErrors.confirmPassword}
+              />
+
+              <div className="flex items-center gap-3 pt-2">
+                <Button
+                  onClick={handleChangePassword}
+                  loading={changingPassword}
+                  leadingIcon={Lock}
+                >
+                  Update Password
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowPasswordSection(false)
+                    setPasswordData({
+                      currentPassword: '',
+                      newPassword: '',
+                      confirmPassword: '',
+                    })
+                    setPasswordErrors({})
+                  }}
+                  disabled={changingPassword}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
+
 
         {/* Team Management - Only for Owners */}
         {profile?.role === 'owner' && (
