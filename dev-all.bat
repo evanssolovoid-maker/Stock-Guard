@@ -14,3 +14,4 @@ start "Backend - StockGuard" cmd /k "cd backend && npm run dev"
 echo.
 echo Both servers are starting in separate windows...
 echo Close the windows or press Ctrl+C in each to stop them.
+

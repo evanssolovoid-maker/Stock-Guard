@@ -131,3 +131,4 @@ GRANT EXECUTE ON FUNCTION public.log_multi_item_sale(UUID, UUID, JSONB) TO anon;
 NOTIFY pgrst, 'reload schema';
 
 
+

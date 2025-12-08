@@ -35,3 +35,4 @@ finally {
     Remove-Job -Job $frontendJob, $backendJob
     Write-Host "Servers stopped." -ForegroundColor Green
 }
+

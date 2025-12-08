@@ -5,6 +5,7 @@ import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 
 // Pages
+import Landing from './pages/Landing'
 import Home from './pages/Home'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
@@ -33,7 +34,7 @@ function App() {
           <div className="App">
             <Routes>
               {/* Public Routes */}
-              <Route path="/" element={<Login />} />
+              <Route path="/" element={<Landing />} />
               <Route path="/home" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
