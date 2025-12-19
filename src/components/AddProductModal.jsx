@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, DollarSign, Hash, Package } from 'lucide-react'
 import Modal from './Modal'
 import Input from './Input'
@@ -6,27 +6,20 @@ import Button from './Button'
 import ImageUpload from './ImageUpload'
 import { useProductStore } from '../store/productStore'
 import { useAuth } from '../hooks/useAuth'
+import { useProductCategories } from '../hooks/useProductCategories'
 import { toast } from 'react-hot-toast'
 import { productsService } from '../services/products.service'
-
-const CATEGORIES = [
-  'Electronics',
-  'Clothing',
-  'Food',
-  'Hardware',
-  'Beauty',
-  'Other',
-]
 
 export default function AddProductModal({ isOpen, onClose }) {
   const { user } = useAuth()
   const { addProduct, loadProducts } = useProductStore()
+  const { categories, loading: categoriesLoading, getDefaultCategory } = useProductCategories()
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState({})
 
   const [formData, setFormData] = useState({
     name: '',
-    category: 'Other',
+    category: '',
     product_type: 'single',
     items_per_unit: '12',
     price: '',
@@ -34,6 +27,13 @@ export default function AddProductModal({ isOpen, onClose }) {
     image: null,
     imageUrl: null,
   })
+
+  // Set default category when categories are loaded
+  useEffect(() => {
+    if (categories.length > 0 && !formData.category) {
+      setFormData(prev => ({ ...prev, category: getDefaultCategory() }))
+    }
+  }, [categories, getDefaultCategory])
 
   const validate = () => {
     const newErrors = {}
@@ -102,7 +102,7 @@ export default function AddProductModal({ isOpen, onClose }) {
           price_per_unit: Number(formData.price),
           quantity: Number(formData.quantity),
           image_url: null,
-        })
+        }, user)
 
         // Upload image with product ID
         imageUrl = await productsService.uploadProductImage(
@@ -116,7 +116,7 @@ export default function AddProductModal({ isOpen, onClose }) {
         })
 
         // Reload products
-        await loadProducts(user.id)
+        await loadProducts(user)
       } else {
         // No image, just create product
         await addProduct({
@@ -129,9 +129,9 @@ export default function AddProductModal({ isOpen, onClose }) {
           price_per_unit: Number(formData.price),
           quantity: Number(formData.quantity),
           image_url: imageUrl,
-        })
+        }, user)
         // Reload products
-        await loadProducts(user.id)
+        await loadProducts(user)
       }
 
       toast.success('Product added successfully!')
@@ -146,7 +146,7 @@ export default function AddProductModal({ isOpen, onClose }) {
   const handleClose = () => {
     setFormData({
       name: '',
-      category: 'Other',
+      category: getDefaultCategory() || '',
       product_type: 'single',
       items_per_unit: '12',
       price: '',
@@ -173,22 +173,39 @@ export default function AddProductModal({ isOpen, onClose }) {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-            Category
+            Category *
           </label>
-          <select
-            value={formData.category}
-            onChange={(e) =>
-              setFormData({ ...formData, category: e.target.value })
-            }
-            className="input-field"
-            required
-          >
-            {CATEGORIES.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
+          {categoriesLoading ? (
+            <div className="input-field bg-gray-100 dark:bg-slate-700 animate-pulse text-gray-500 dark:text-slate-400">
+              Loading categories...
+            </div>
+          ) : (
+            <select
+              value={formData.category}
+              onChange={(e) =>
+                setFormData({ ...formData, category: e.target.value })
+              }
+              className="input-field"
+              required
+              disabled={categories.length === 0}
+            >
+              {categories.length === 0 ? (
+                <option value="">No categories available</option>
+              ) : (
+                <>
+                  <option value="">Select a category</option>
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </>
+              )}
+            </select>
+          )}
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+            Categories are based on your business type
+          </p>
         </div>
 
         {/* Product Type */}

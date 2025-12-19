@@ -235,19 +235,43 @@ export default function Settings() {
     if (!user || !validateNewMember()) return
 
     setCreating(true)
+    // Clear any previous errors
+    setMemberErrors({})
+    
     try {
+      // Get the owner's business name for workers/managers
+      // Workers and managers need the business_name to link them to the business
+      const ownerBusinessName = user.business_name || profile?.business_name
+      
+      if (!ownerBusinessName && (selectedRole === 'worker' || selectedRole === 'manager')) {
+        throw new Error('Unable to determine business name. Please refresh the page and try again.')
+      }
+
+      // Normalize username to lowercase for consistency
+      const normalizedUsername = newMember.username.trim().toLowerCase()
+      
+      console.log('Creating user with:', {
+        username: normalizedUsername,
+        role: selectedRole,
+        business_name: selectedRole === 'owner' ? null : ownerBusinessName
+      })
+
       const userData = {
-        username: newMember.username.trim().toLowerCase(),
+        username: normalizedUsername,
         password: newMember.password,
         role: selectedRole,
-        business_name: null, // Business name not required for managers/workers
+        business_name: selectedRole === 'owner' ? null : ownerBusinessName, // Use owner's business name for workers/managers
         phone_number: newMember.phoneNumber.trim(),
       }
 
-      const { user: newUser, error } = await authService.signUp(userData, profile?.role)
+      const { user: newUser, error: signUpError } = await authService.signUp(userData, profile?.role)
 
-      if (error) {
-        throw new Error(error)
+      if (signUpError) {
+        console.error('Sign up returned error:', signUpError)
+        // Create error with the signUpError message
+        const error = new Error(signUpError)
+        error.originalError = signUpError
+        throw error
       }
 
       if (!newUser) {
@@ -277,12 +301,36 @@ export default function Settings() {
       }
     } catch (error) {
       console.error('Error creating member:', error)
-      let errorMessage = error.message || 'Failed to create user'
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        originalError: error.originalError
+      })
       
-      if (errorMessage.includes('already exists') || errorMessage.includes('unique')) {
-        errorMessage = 'This username is already taken. Please choose a different one.'
+      // Extract error message from different possible formats
+      let errorMessage = error.message || error.error || error.originalError || 'Failed to create user'
+      
+      // Check for duplicate username errors (various formats)
+      if (
+        errorMessage.includes('already exists') || 
+        errorMessage.includes('unique') ||
+        errorMessage.includes('duplicate key') ||
+        errorMessage.includes('violates unique constraint') ||
+        errorMessage.includes('user_profiles_username_key') ||
+        error?.code === '23505' ||
+        error?.code === 'P0001'
+      ) {
+        errorMessage = `The username "${newMember.username.trim()}" is already taken. Please choose a different one.`
+        // Set error on username field
+        setMemberErrors(prev => ({
+          ...prev,
+          username: errorMessage
+        }))
       } else if (errorMessage.includes('Maximum')) {
-        errorMessage = error.message
+        errorMessage = error.message || errorMessage
+      } else if (errorMessage.includes('Business') && errorMessage.includes('not found')) {
+        errorMessage = 'Business not found. Please refresh the page and try again.'
       }
       
       toast.error(errorMessage)
@@ -651,12 +699,21 @@ export default function Settings() {
             label="Username"
             type="text"
             value={newMember.username}
-            onChange={(e) =>
+            onChange={(e) => {
+              const newUsername = e.target.value.replace(/[^a-zA-Z0-9_]/g, '')
               setNewMember({
                 ...newMember,
-                username: e.target.value.replace(/[^a-zA-Z0-9_]/g, ''),
+                username: newUsername,
               })
-            }
+              // Clear username error when user starts typing
+              if (memberErrors.username) {
+                setMemberErrors(prev => {
+                  const newErrors = { ...prev }
+                  delete newErrors.username
+                  return newErrors
+                })
+              }
+            }}
             error={memberErrors.username}
             placeholder="johndoe"
             required

@@ -79,7 +79,7 @@ export const useSalesStore = create((set, get) => ({
   },
 
   // Real-time subscription
-  subscribeToSales: (ownerId) => {
+  subscribeToSales: (businessOwnerId) => {
     // Unsubscribe from existing subscription if any
     const existingSub = get().realtimeSubscription;
     if (existingSub) {
@@ -95,7 +95,7 @@ export const useSalesStore = create((set, get) => ({
           event: "INSERT",
           schema: "public",
           table: "sales",
-          filter: `owner_id=eq.${ownerId}`,
+          filter: `business_owner_id=eq.${businessOwnerId}`, // Multi-tenant filter
         },
         async (payload) => {
           console.log("New sale detected:", payload.new);
@@ -123,7 +123,7 @@ export const useSalesStore = create((set, get) => ({
             get().addSale(sale);
 
             // Update today's stats
-            get().loadTodayStats(ownerId);
+            get().loadTodayStats(businessOwnerId);
           } catch (error) {
             console.error("Error fetching new sale:", error);
           }

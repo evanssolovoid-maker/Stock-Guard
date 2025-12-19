@@ -16,6 +16,7 @@ import { useSalesStore } from '../store/salesStore'
 import { useProductStore } from '../store/productStore'
 import { salesService } from '../services/sales.service'
 import { productsService } from '../services/products.service'
+import { getBusinessOwnerId } from '../utils/business'
 import { toast } from 'react-hot-toast'
 
 export default function Dashboard() {
@@ -46,13 +47,15 @@ export default function Dashboard() {
   // Load initial data
   useEffect(() => {
     if (user && profile?.role === 'owner') {
+      const businessOwnerId = getBusinessOwnerId(user)
+      
       const loadData = async () => {
         setLoading(true)
         try {
           await Promise.all([
-            loadTodayStats(user.id),
-            loadRecentSales(user.id),
-            loadProducts(user.id),
+            loadTodayStats(businessOwnerId),
+            loadRecentSales(businessOwnerId),
+            loadProducts(user),
           ])
 
           // Get low stock products
@@ -60,13 +63,13 @@ export default function Dashboard() {
           setLowStockProducts(lowStock)
 
           // Get top selling product today
-          const topProducts = await salesService.getTopSellingProducts(user.id, {}, 1)
+          const topProducts = await salesService.getTopSellingProducts(businessOwnerId, {}, 1)
           if (topProducts.length > 0) {
             setTopProduct(topProducts[0])
           }
 
           // Get top performing worker
-          const workers = await salesService.getWorkerPerformance(user.id, {})
+          const workers = await salesService.getWorkerPerformance(businessOwnerId, {})
           if (workers.length > 0) {
             const sorted = workers.sort((a, b) => b.totalRevenue - a.totalRevenue)
             setTopWorker(sorted[0])
@@ -82,7 +85,7 @@ export default function Dashboard() {
       loadData()
 
       // Subscribe to real-time sales
-      subscribeToSales(user.id)
+      subscribeToSales(businessOwnerId)
 
       return () => {
         unsubscribeFromSales()
@@ -146,7 +149,7 @@ export default function Dashboard() {
         <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 dark:from-purple-600 dark:to-purple-700 p-6 text-white">
           <div>
             <h1 className="text-2xl font-bold mb-1">
-              Welcome back, {profile?.business_name || 'Business Owner'}!
+              Welcome back, {profile?.username || user?.username || 'Business Owner'}!
             </h1>
             <p className="text-blue-100 dark:text-purple-100">
               {new Date().toLocaleDateString('en-US', {

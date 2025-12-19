@@ -134,7 +134,52 @@ This migration creates:
    - `business_workers`
    - `invite_codes`
 
-### 3. Add Password Functions
+### 3. Add Multi-Tenant System (Required)
+
+**IMPORTANT: If you have existing test data with duplicate business names:**
+
+**Option A - Clean Start (Recommended for test environments):**
+
+1. Run `database/cleanup-test-data.sql` to delete all test data
+2. This will remove all owners, workers, managers, products, and sales
+3. Then proceed with the migration below
+
+**Option B - Keep Existing Data:**
+
+1. Run `database/fix-duplicates-simple.sql` first to fix duplicate business names
+2. Verify no duplicates remain (the script will show you)
+3. Then proceed with the migration below
+
+**Note**: The `multi-tenant-system.sql` script includes duplicate handling, so Option B is usually not needed unless you have many duplicates.
+
+**Multi-Tenant Database Migration:**
+
+1. In SQL Editor, open `database/multi-tenant-system.sql`
+2. Copy and run the entire script
+3. This enables multiple businesses to operate independently with data isolation
+4. The script will automatically handle duplicates if any exist
+
+**Update Sales Function for Multi-Tenancy:**
+
+1. In SQL Editor, open `database/update-log-multi-item-sale-multi-tenant.sql`
+2. Copy and run the entire script
+3. This updates the sales logging function to use `business_owner_id`
+
+**Fix RLS Policies for Custom Auth (REQUIRED):**
+
+1. In SQL Editor, open `database/fix-rls-policies-custom-auth.sql`
+2. Copy and run the entire script
+3. This fixes the RLS policies to work with custom authentication (the multi-tenant-system.sql creates policies that use `auth.uid()` which doesn't work with custom auth)
+
+**Fix Business Name Unique Constraint (REQUIRED if creating workers):**
+
+1. In SQL Editor, open `database/fix-business-name-unique-constraint.sql`
+2. Copy and run the entire script
+3. This fixes the unique constraint to only apply to owners, allowing workers/managers to share the same business_name as their owner
+
+**Important**: After running, wait a few seconds for Supabase to refresh its schema cache.
+
+### 4. Add Password Functions
 
 **Password Update Function** (for changing password when logged in):
 
@@ -160,7 +205,7 @@ These functions allow users to:
 - Change their password when logged in (requires current password)
 - Reset their password if forgotten (requires username only)
 
-### 4. Add Notification Columns (Optional)
+### 5. Add Notification Columns (Optional)
 
 If you want to enable notification preferences in the future:
 
@@ -405,8 +450,15 @@ Stock-Guard/
 
 - **`migration-fresh-install.sql`**: Complete database setup for new projects
 - **`migration-custom-auth.sql`**: Migration for existing projects
+- **`business-category-system.sql`**: Adds business categories and product category mapping (required for business category feature)
+- **`multi-tenant-system.sql`**: Enables multi-tenant system with data isolation (required)
+- **`update-log-multi-item-sale-multi-tenant.sql`**: Updates sales function for multi-tenancy (required after multi-tenant-system.sql)
+- **`fix-rls-policies-custom-auth.sql`**: Fixes RLS policies for custom authentication (required)
+- **`fix-business-name-unique-constraint.sql`**: Fixes business name unique constraint for workers (required if creating workers)
 - **`update-password-function.sql`**: Creates password update function (required for password change feature)
 - **`reset-password-function.sql`**: Creates password reset function (required for forgot password feature)
+- **`cleanup-test-data.sql`**: Deletes all test data for fresh start (optional)
+- **`fix-duplicates-simple.sql`**: Fixes duplicate business names before migration (optional)
 - **`add-notification-columns.sql`**: Adds notification preference columns (optional)
 - **`create-log-multi-item-sale.sql`**: Creates multi-item sale function
 - **`disable-notification-trigger.sql`**: Disables backend notification trigger
@@ -475,4 +527,3 @@ This build guide reflects the app at its current state with:
 
 **Last Updated**: Current build state
 **Version**: 1.0.0
-

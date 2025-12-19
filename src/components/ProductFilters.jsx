@@ -3,16 +3,7 @@ import { Search, X } from 'lucide-react'
 import Input from './Input'
 import Button from './Button'
 import Card from './Card'
-
-const CATEGORIES = [
-  { value: 'all', label: 'All Categories' },
-  { value: 'Electronics', label: 'Electronics' },
-  { value: 'Clothing', label: 'Clothing' },
-  { value: 'Food', label: 'Food' },
-  { value: 'Hardware', label: 'Hardware' },
-  { value: 'Beauty', label: 'Beauty' },
-  { value: 'Other', label: 'Other' },
-]
+import { useProductCategories } from '../hooks/useProductCategories'
 
 export default function ProductFilters({
   searchQuery,
@@ -21,8 +12,15 @@ export default function ProductFilters({
   onCategoryChange,
   onClearFilters,
 }) {
+  const { categories, loading: categoriesLoading } = useProductCategories()
   const [isOpen, setIsOpen] = useState(false)
   const hasActiveFilters = searchQuery || (categoryFilter && categoryFilter !== 'all')
+  
+  // Build category options with "All Categories" first
+  const categoryOptions = [
+    { value: 'all', label: 'All Categories' },
+    ...categories.map(cat => ({ value: cat, label: cat }))
+  ]
 
   const activeFilterCount = [
     searchQuery ? 1 : 0,
@@ -49,17 +47,24 @@ export default function ProductFilters({
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
             Category
           </label>
-          <select
-            value={categoryFilter}
-            onChange={(e) => onCategoryChange(e.target.value)}
-            className="input-field"
-          >
-            {CATEGORIES.map((cat) => (
-              <option key={cat.value} value={cat.value}>
-                {cat.label}
-              </option>
-            ))}
-          </select>
+          {categoriesLoading ? (
+            <div className="input-field bg-gray-100 dark:bg-slate-700 animate-pulse text-gray-500 dark:text-slate-400">
+              Loading...
+            </div>
+          ) : (
+            <select
+              value={categoryFilter}
+              onChange={(e) => onCategoryChange(e.target.value)}
+              className="input-field"
+              disabled={categoryOptions.length === 1}
+            >
+              {categoryOptions.map((cat) => (
+                <option key={cat.value} value={cat.value}>
+                  {cat.label}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Clear Filters */}

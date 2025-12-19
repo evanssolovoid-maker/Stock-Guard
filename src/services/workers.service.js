@@ -96,7 +96,7 @@ export const workersService = {
     const { data: existing } = await supabase
       .from("business_workers")
       .select("id")
-      .eq("owner_id", inviteData.owner_id)
+      .eq("business_owner_id", inviteData.owner_id)
       .eq("worker_id", workerId)
       .single();
 
@@ -108,7 +108,8 @@ export const workersService = {
     const { error: linkError } = await supabase
       .from("business_workers")
       .insert({
-        owner_id: inviteData.owner_id,
+        owner_id: inviteData.owner_id, // Keep for backward compatibility
+        business_owner_id: inviteData.owner_id, // Multi-tenant field
         worker_id: workerId,
       });
 
@@ -126,11 +127,10 @@ export const workersService = {
   },
 
   /**
-   * Fetch all workers for an owner
-   * For single-company setup: fetch directly from user_profiles where role='worker'
+   * Fetch all workers for a business owner (multi-tenant)
    */
   async fetchWorkers(ownerId) {
-    // Fetch workers directly from user_profiles (single-company setup)
+    // Fetch workers from user_profiles filtered by business_owner_id
     const { data: workers, error } = await supabase
       .from("user_profiles")
       .select(
@@ -142,7 +142,8 @@ export const workersService = {
         created_at
       `
       )
-      .eq("role", "worker")
+      .eq("business_owner_id", ownerId)
+      .in("role", ["worker", "manager"])
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -157,7 +158,6 @@ export const workersService = {
     // Get sales stats for each worker
     const workersWithStats = await Promise.all(
       workers.map(async (worker) => {
-
         if (!worker || !worker.id) {
           console.warn("Invalid worker data:", worker);
           return null;
@@ -185,7 +185,8 @@ export const workersService = {
             items:sales_items(quantity_sold, line_total)
             `
           )
-          .eq("worker_id", worker.id);
+          .eq("worker_id", worker.id)
+          .eq("business_owner_id", ownerId); // Multi-tenant filter
 
         if (salesError) {
           console.warn(
@@ -196,9 +197,9 @@ export const workersService = {
         }
 
         // Calculate totals from sales items
-        let totalSales = 0
-        let totalRevenue = 0
-        
+        let totalSales = 0;
+        let totalRevenue = 0;
+
         allSales?.forEach((sale) => {
           const itemQuantities = (sale.items || []).reduce(
             (sum, item) => sum + parseInt(item.quantity_sold || 0),
@@ -208,7 +209,7 @@ export const workersService = {
             (sum, item) => sum + parseFloat(item.line_total || 0),
             0
           );
-          
+
           totalSales += itemQuantities;
           totalRevenue += parseFloat(sale.final_total || itemRevenue);
         });
@@ -238,7 +239,7 @@ export const workersService = {
     const { error } = await supabase
       .from("business_workers")
       .delete()
-      .eq("owner_id", ownerId)
+      .eq("business_owner_id", ownerId)
       .eq("worker_id", workerId);
 
     if (error) throw error;
@@ -263,21 +264,21 @@ export const workersService = {
         )
       `
       )
-      .eq("owner_id", ownerId)
+      .eq("business_owner_id", ownerId)
       .eq("worker_id", workerId)
       .order("sale_date", { ascending: false });
 
     if (startDate) {
       // Convert date string to start of day timestamp for proper filtering
-      const start = new Date(startDate)
-      start.setHours(0, 0, 0, 0)
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
       query = query.gte("sale_date", start.toISOString());
     }
 
     if (endDate) {
       // Convert date string to end of day timestamp for proper filtering
-      const end = new Date(endDate)
-      end.setHours(23, 59, 59, 999)
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
       query = query.lte("sale_date", end.toISOString());
     }
 
@@ -287,17 +288,19 @@ export const workersService = {
 
     // Calculate stats from multi-item sales
     const totalSales = data?.length || 0;
-    const totalRevenue = data?.reduce((sum, s) => sum + parseFloat(s.final_total || 0), 0) || 0;
-    
+    const totalRevenue =
+      data?.reduce((sum, s) => sum + parseFloat(s.final_total || 0), 0) || 0;
+
     // Calculate total quantity from all items in all sales
-    const totalQuantity = data?.reduce((sum, sale) => {
-      const itemQuantities = (sale.items || []).reduce(
-        (itemSum, item) => itemSum + parseInt(item.quantity_sold || 0),
-        0
-      );
-      return sum + itemQuantities;
-    }, 0) || 0;
-    
+    const totalQuantity =
+      data?.reduce((sum, sale) => {
+        const itemQuantities = (sale.items || []).reduce(
+          (itemSum, item) => itemSum + parseInt(item.quantity_sold || 0),
+          0
+        );
+        return sum + itemQuantities;
+      }, 0) || 0;
+
     const averageSale = totalSales > 0 ? totalRevenue / totalSales : 0;
 
     // Group by date for chart
@@ -326,7 +329,7 @@ export const workersService = {
       if (sale.items && sale.items.length > 0) {
         sale.items.forEach((item) => {
           recentSales.push({
-            id: `${sale.id}-${item.product?.id || 'unknown'}`,
+            id: `${sale.id}-${item.product?.id || "unknown"}`,
             sale_id: sale.id,
             sale_date: sale.sale_date,
             quantity_sold: item.quantity_sold,

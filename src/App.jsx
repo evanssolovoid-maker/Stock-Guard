@@ -6,7 +6,6 @@ import ProtectedRoute from './components/ProtectedRoute'
 
 // Pages
 import Landing from './pages/Landing'
-import Home from './pages/Home'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import ForgotPassword from './pages/ForgotPassword'
@@ -35,7 +34,6 @@ function App() {
             <Routes>
               {/* Public Routes */}
               <Route path="/" element={<Landing />} />
-              <Route path="/home" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />

@@ -1,11 +1,19 @@
 import { supabase } from "./supabase";
+import { getBusinessOwnerId } from "../utils/business";
 
 export const productsService = {
-  async fetchProducts(ownerId, filters = {}) {
+  async fetchProducts(user, filters = {}) {
+    // Get business owner ID (works for owners, managers, and workers)
+    const businessOwnerId = getBusinessOwnerId(user);
+
+    if (!businessOwnerId) {
+      throw new Error("Unable to determine business owner");
+    }
+
     let query = supabase
       .from("products")
       .select("*")
-      .eq("owner_id", ownerId)
+      .eq("business_owner_id", businessOwnerId)
       .order("created_at", { ascending: false });
 
     // Apply search filter
@@ -55,8 +63,13 @@ export const productsService = {
     const finalPricePerUnit = productData.price_per_unit || pricePerUnit;
     const finalPricePerItem = productData.price_per_item || pricePerItem;
 
+    // Get business owner ID from user or productData
+    const businessOwnerId =
+      productData.business_owner_id || productData.owner_id;
+
     const productToInsert = {
-      owner_id: productData.owner_id,
+      owner_id: businessOwnerId, // Keep for backward compatibility
+      business_owner_id: businessOwnerId, // Multi-tenant field
       name: productData.name,
       category: productData.category,
       product_type: productData.product_type || "single",
@@ -131,11 +144,17 @@ export const productsService = {
     if (error) throw error;
   },
 
-  async getLowStockProducts(ownerId, threshold = 10) {
+  async getLowStockProducts(user, threshold = 10) {
+    const businessOwnerId = getBusinessOwnerId(user);
+
+    if (!businessOwnerId) {
+      throw new Error("Unable to determine business owner");
+    }
+
     const { data, error } = await supabase
       .from("products")
       .select("*")
-      .eq("owner_id", ownerId)
+      .eq("business_owner_id", businessOwnerId)
       .lte("quantity", threshold)
       .order("quantity", { ascending: true });
 

@@ -9,6 +9,7 @@ import SaleDetailsModal from '../components/SaleDetailsModal'
 import { DollarSign, ShoppingCart, TrendingUp, BarChart3 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { salesService } from '../services/sales.service'
+import { getBusinessOwnerId } from '../utils/business'
 import { toast } from 'react-hot-toast'
 
 export default function MySales() {
@@ -43,16 +44,11 @@ export default function MySales() {
 
       // If manager, show all sales for their owner's business
       if (profile?.role === 'manager') {
-        // Get owner ID for manager's business
-        try {
-          const ownerId = await salesService.getOwnerIdForWorker(user.id)
-          if (ownerId) {
-            filters.ownerId = ownerId
-            delete filters.workerId
-          }
-        } catch (error) {
-          console.error('Error getting owner ID:', error)
-          // Fallback: show worker's own sales
+        // Get business owner ID from user
+        const businessOwnerId = getBusinessOwnerId(user)
+        if (businessOwnerId) {
+          filters.ownerId = businessOwnerId
+          delete filters.workerId
         }
       }
 

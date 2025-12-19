@@ -1,32 +1,20 @@
--- Fix for log_multi_item_sale function to handle TEXT input and cast to JSONB
--- This fixes the "cannot extract elements from a scalar" error
--- Create overloaded function to accept TEXT input
-CREATE OR REPLACE FUNCTION log_multi_item_sale(
+-- Update log_multi_item_sale function for multi-tenant system
+-- Run this SQL in Supabase SQL Editor after running multi-tenant-system.sql
+-- Drop existing function
+DROP FUNCTION IF EXISTS log_multi_item_sale(UUID, UUID, JSONB);
+-- Create updated function with business_owner_id support
+CREATE OR REPLACE FUNCTION public.log_multi_item_sale(
         p_worker_id UUID,
         p_owner_id UUID,
-        p_items TEXT
-    ) RETURNS TABLE(
-        sale_id UUID,
-        subtotal DECIMAL,
-        discount_amount DECIMAL,
-        final_total DECIMAL
-    ) LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN -- Cast TEXT to JSONB and call the main function
-    RETURN QUERY
-SELECT *
-FROM log_multi_item_sale(p_worker_id, p_owner_id, p_items::jsonb);
-END;
-$$;
--- Keep the original JSONB version
-CREATE OR REPLACE FUNCTION log_multi_item_sale(
-        p_worker_id UUID,
-        p_owner_id UUID,
+        -- This is now business_owner_id
         p_items JSONB
     ) RETURNS TABLE(
         sale_id UUID,
         subtotal DECIMAL,
         discount_amount DECIMAL,
         final_total DECIMAL
-    ) LANGUAGE plpgsql SECURITY DEFINER AS $$
+    ) LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public AS $$
 DECLARE v_sale_id UUID;
 v_subtotal DECIMAL := 0;
 v_discount_amount DECIMAL := 0;
@@ -39,24 +27,28 @@ v_settings RECORD;
 BEGIN -- Validate that it's an array
 IF jsonb_typeof(p_items) != 'array' THEN RAISE EXCEPTION 'p_items must be a JSON array';
 END IF;
--- Create sale record
+-- Create sale record with business_owner_id
 INSERT INTO sales (
         owner_id,
+        -- Keep for backward compatibility
+        business_owner_id,
+        -- Multi-tenant field
         worker_id,
         subtotal,
         discount_amount,
         discount_percentage,
         final_total
     )
-VALUES (p_owner_id, p_worker_id, 0, 0, 0, 0)
+VALUES (p_owner_id, p_owner_id, p_worker_id, 0, 0, 0, 0)
 RETURNING id INTO v_sale_id;
 -- Process each item
 FOR v_item IN
 SELECT *
-FROM jsonb_array_elements(p_items) LOOP -- Lock and get product
+FROM jsonb_array_elements(p_items) LOOP -- Lock and get product (filter by business_owner_id for data isolation)
 SELECT * INTO v_product
 FROM products
-WHERE id = (v_item->>'product_id')::UUID FOR
+WHERE id = (v_item->>'product_id')::UUID
+    AND business_owner_id = p_owner_id FOR
 UPDATE;
 IF NOT FOUND THEN RAISE EXCEPTION 'Product not found: %',
 v_item->>'product_id';
@@ -115,3 +107,6 @@ SELECT v_sale_id,
     v_final_total;
 END;
 $$;
+-- Grant execute permission
+GRANT EXECUTE ON FUNCTION public.log_multi_item_sale(UUID, UUID, JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.log_multi_item_sale(UUID, UUID, JSONB) TO anon;

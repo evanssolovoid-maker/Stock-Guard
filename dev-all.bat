@@ -15,3 +15,4 @@ echo.
 echo Both servers are starting in separate windows...
 echo Close the windows or press Ctrl+C in each to stop them.
 
+

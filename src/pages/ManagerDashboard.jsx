@@ -4,7 +4,6 @@ import {
   DollarSign,
   ShoppingCart,
   AlertTriangle,
-  Users,
   ArrowRight,
   Package,
 } from 'lucide-react'
@@ -16,7 +15,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useSalesStore } from '../store/salesStore'
 import { useProductStore } from '../store/productStore'
 import { salesService } from '../services/sales.service'
-import { supabase } from '../services/supabase'
+import { getBusinessOwnerId } from '../utils/business'
 import { toast } from 'react-hot-toast'
 
 export default function ManagerDashboard() {
@@ -92,7 +91,7 @@ export default function ManagerDashboard() {
           await Promise.all([
             loadTodayStats(ownerId),
             loadRecentSales(ownerId),
-            loadProducts(ownerId),
+            loadProducts(user),
           ])
 
           // Get low stock products
@@ -168,7 +167,7 @@ export default function ManagerDashboard() {
     return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
   }
 
-  if (loading || !ownerId) {
+  if (loading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
@@ -195,7 +194,7 @@ export default function ManagerDashboard() {
         <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 dark:from-purple-600 dark:to-purple-700 p-6 text-white">
           <div>
             <h1 className="text-2xl font-bold mb-1">
-              Welcome, {profile?.business_name || profile?.username || 'Manager'}!
+              Welcome, {profile?.username || user?.username || 'Manager'}!
             </h1>
             <p className="text-blue-100 dark:text-purple-100">
               {new Date().toLocaleDateString('en-US', {
@@ -459,6 +458,7 @@ export default function ManagerDashboard() {
     </DashboardLayout>
   )
 }
+
 
 
 

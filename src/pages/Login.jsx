@@ -5,11 +5,14 @@ import { toast } from 'react-hot-toast'
 import AuthLayout from '../components/AuthLayout'
 import Input from '../components/Input'
 import Button from '../components/Button'
-import { User, Lock } from 'lucide-react'
+import BusinessSelector from '../components/BusinessSelector'
+import { User, Lock, Briefcase, UserCog, UserPlus } from 'lucide-react'
 
 export default function Login() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [role, setRole] = useState('owner')
+  const [businessName, setBusinessName] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState({})
@@ -22,17 +25,14 @@ export default function Login() {
     // Don't redirect if we're still loading auth
     if (authLoading) return
 
-    // If user exists but no profile yet, wait a bit
-    if (user && !profile && !justLoggedIn) return
-
-    // If we have user and profile, navigate
-    if (user && profile) {
-      // Determine redirect based on role
-      if (profile.role === 'owner') {
+    // If we have user, navigate based on role (use profile.role if available, otherwise user.role)
+    if (user) {
+      const userRole = profile?.role || user.role
+      if (userRole === 'owner') {
         navigate('/dashboard', { replace: true })
-      } else if (profile.role === 'manager') {
+      } else if (userRole === 'manager') {
         navigate('/manager-dashboard', { replace: true })
-      } else if (profile.role === 'worker') {
+      } else if (userRole === 'worker') {
         navigate('/log-sale', { replace: true })
       }
       // Clear loading state if we just logged in
@@ -55,6 +55,9 @@ export default function Login() {
     } else if (password.length < 4) {
       newErrors.password = 'Password must be at least 4 characters'
     }
+    if (role !== 'owner' && !businessName) {
+      newErrors.businessName = 'Please select your company'
+    }
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -65,7 +68,9 @@ export default function Login() {
 
     setLoading(true)
     try {
-      await signIn(username.trim(), password)
+      // For owners, business_name is their own; for workers/managers, use selected business
+      const businessNameForLogin = role === 'owner' ? null : businessName
+      await signIn(username.trim(), password, businessNameForLogin)
       toast.success('Welcome back!')
       setJustLoggedIn(true)
     } catch (error) {
@@ -74,6 +79,8 @@ export default function Login() {
       // Provide helpful error messages
       if (error.message?.includes('Invalid username or password') || error.message?.includes('Invalid')) {
         toast.error('Invalid username or password. Please check your credentials and try again.')
+      } else if (error.message?.includes('Business') || error.message?.includes('company')) {
+        toast.error('Business not found. Please check the company name and try again.')
       } else if (error.message?.includes('Network') || error.message?.includes('fetch')) {
         toast.error('Network error. Please check your internet connection and try again.')
       } else {
@@ -87,6 +94,77 @@ export default function Login() {
   return (
     <AuthLayout title="Sign in to your account" subtitle="Welcome back! Please enter your details.">
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Role Selection */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+            I am a:
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setRole('owner')
+                setBusinessName('')
+                setErrors({ ...errors, businessName: undefined })
+              }}
+              className={`flex-1 px-4 py-2 rounded-lg border-2 transition-all ${
+                role === 'owner'
+                  ? 'border-blue-500 dark:border-purple-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                  : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:border-blue-300 dark:hover:border-purple-400'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <Briefcase className="w-4 h-4" />
+                <span className="text-sm font-medium">Owner</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRole('manager')
+                setBusinessName('')
+              }}
+              className={`flex-1 px-4 py-2 rounded-lg border-2 transition-all ${
+                role === 'manager'
+                  ? 'border-blue-500 dark:border-purple-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                  : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:border-blue-300 dark:hover:border-purple-400'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <UserCog className="w-4 h-4" />
+                <span className="text-sm font-medium">Manager</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRole('worker')
+                setBusinessName('')
+              }}
+              className={`flex-1 px-4 py-2 rounded-lg border-2 transition-all ${
+                role === 'worker'
+                  ? 'border-blue-500 dark:border-purple-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                  : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:border-blue-300 dark:hover:border-purple-400'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <UserPlus className="w-4 h-4" />
+                <span className="text-sm font-medium">Worker</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* Business Selector for non-owners */}
+        {role !== 'owner' && (
+          <BusinessSelector
+            selectedBusiness={businessName}
+            onSelect={setBusinessName}
+            error={errors.businessName}
+            placeholder="Search for your company..."
+          />
+        )}
+
         <Input
           label="Username"
           type="text"

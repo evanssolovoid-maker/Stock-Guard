@@ -87,7 +87,7 @@ export default function Analytics() {
           event: 'INSERT',
           schema: 'public',
           table: 'sales',
-          filter: `owner_id=eq.${ownerId}`,
+          filter: `business_owner_id=eq.${ownerId}`,
         },
         () => {
           // Reload analytics when new sale is added

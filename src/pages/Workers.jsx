@@ -18,6 +18,7 @@ import WorkerPerformanceModal from '../components/WorkerPerformanceModal'
 import RemoveWorkerConfirmation from '../components/RemoveWorkerConfirmation'
 import { useAuth } from '../hooks/useAuth'
 import { useWorkersStore } from '../store/workersStore'
+import { getBusinessOwnerId } from '../utils/business'
 import { toast } from 'react-hot-toast'
 
 export default function Workers() {
@@ -45,7 +46,10 @@ export default function Workers() {
 
   useEffect(() => {
     if (user) {
-      loadWorkers(user.id)
+      const businessOwnerId = getBusinessOwnerId(user)
+      if (businessOwnerId) {
+        loadWorkers(businessOwnerId)
+      }
     }
   }, [user, loadWorkers])
 
@@ -53,7 +57,10 @@ export default function Workers() {
   useEffect(() => {
     const handleWorkerCreated = () => {
       if (user) {
-        loadWorkers(user.id)
+        const businessOwnerId = getBusinessOwnerId(user)
+        if (businessOwnerId) {
+          loadWorkers(businessOwnerId)
+        }
       }
     }
     

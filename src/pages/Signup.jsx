@@ -5,7 +5,9 @@ import { toast } from 'react-hot-toast'
 import AuthLayout from '../components/AuthLayout'
 import Input from '../components/Input'
 import Button from '../components/Button'
-import { User, Lock, Building2, Phone, UserCog, UserPlus } from 'lucide-react'
+import BusinessCategorySelector from '../components/BusinessCategorySelector'
+import BusinessSelector from '../components/BusinessSelector'
+import { User, Lock, Building2, Phone, Briefcase, UserCog, UserPlus } from 'lucide-react'
 
 export default function Signup() {
   const [loading, setLoading] = useState(false)
@@ -18,6 +20,7 @@ export default function Signup() {
   // Form fields
   const [username, setUsername] = useState('')
   const [businessName, setBusinessName] = useState('')
+  const [businessCategory, setBusinessCategory] = useState('')
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -51,8 +54,18 @@ export default function Signup() {
       newErrors.username = 'Username can only contain letters, numbers, and underscores'
     }
     
-    if (!businessName.trim()) {
-      newErrors.businessName = 'Business name is required'
+    if (role === 'owner') {
+      if (!businessName.trim()) {
+        newErrors.businessName = 'Business name is required'
+      }
+      if (!businessCategory) {
+        newErrors.businessCategory = 'Please select your business type'
+      }
+    } else {
+      // For workers/managers, business name comes from selector
+      if (!businessName) {
+        newErrors.businessName = 'Please select your company'
+      }
     }
     
     if (!phone.trim()) {
@@ -86,8 +99,9 @@ export default function Signup() {
       const userData = {
         username: username.trim().toLowerCase(),
         password: password,
-        role: 'owner',
-        business_name: businessName.trim(),
+        role: role,
+        business_name: role === 'owner' ? businessName.trim() : businessName,
+        business_category: role === 'owner' ? businessCategory : null,
         phone_number: phone.trim(),
       }
 
@@ -102,10 +116,19 @@ export default function Signup() {
       }
 
       // Auto-sign in after successful signup
-      await signIn(userData.username, userData.password)
+      const businessNameForLogin = role === 'owner' ? null : businessName
+      await signIn(userData.username, userData.password, businessNameForLogin)
       
       toast.success('Account created successfully!')
-      navigate('/dashboard')
+      
+      // Redirect based on role
+      if (role === 'owner') {
+        navigate('/dashboard')
+      } else if (role === 'manager') {
+        navigate('/manager-dashboard')
+      } else {
+        navigate('/log-sale')
+      }
     } catch (error) {
       console.error('Signup error:', error)
       
@@ -135,6 +158,70 @@ export default function Signup() {
   return (
     <AuthLayout title="Create your account" subtitle="Get started with StockGuard today">
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Role Selection */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+            I am a:
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setRole('owner')
+                setBusinessName('')
+                setBusinessCategory('')
+                setErrors({ ...errors, businessName: undefined, businessCategory: undefined })
+              }}
+              className={`flex-1 px-4 py-2 rounded-lg border-2 transition-all ${
+                role === 'owner'
+                  ? 'border-blue-500 dark:border-purple-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                  : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:border-blue-300 dark:hover:border-purple-400'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <Briefcase className="w-4 h-4" />
+                <span className="text-sm font-medium">Owner</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRole('manager')
+                setBusinessName('')
+                setBusinessCategory('')
+              }}
+              className={`flex-1 px-4 py-2 rounded-lg border-2 transition-all ${
+                role === 'manager'
+                  ? 'border-blue-500 dark:border-purple-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                  : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:border-blue-300 dark:hover:border-purple-400'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <UserCog className="w-4 h-4" />
+                <span className="text-sm font-medium">Manager</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRole('worker')
+                setBusinessName('')
+                setBusinessCategory('')
+              }}
+              className={`flex-1 px-4 py-2 rounded-lg border-2 transition-all ${
+                role === 'worker'
+                  ? 'border-blue-500 dark:border-purple-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                  : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:border-blue-300 dark:hover:border-purple-400'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <UserPlus className="w-4 h-4" />
+                <span className="text-sm font-medium">Worker</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
         <Input
           label="Username"
           type="text"
@@ -147,16 +234,38 @@ export default function Signup() {
           autoComplete="username"
         />
 
-        <Input
-          label="Business Name"
-          type="text"
-          value={businessName}
-          onChange={(e) => setBusinessName(e.target.value)}
-          error={errors.businessName}
-          leadingIcon={Building2}
-          placeholder="My Business"
-          required
-        />
+        {/* Business Name Input for Owners */}
+        {role === 'owner' && (
+          <Input
+            label="Business Name"
+            type="text"
+            value={businessName}
+            onChange={(e) => setBusinessName(e.target.value)}
+            error={errors.businessName}
+            leadingIcon={Building2}
+            placeholder="My Business"
+            required
+          />
+        )}
+
+        {/* Business Selector for Workers/Managers */}
+        {role !== 'owner' && (
+          <BusinessSelector
+            selectedBusiness={businessName}
+            onSelect={setBusinessName}
+            error={errors.businessName}
+            placeholder="Search for your company..."
+          />
+        )}
+
+        {/* Business Category Selector for Owners Only */}
+        {role === 'owner' && (
+          <BusinessCategorySelector
+            selected={businessCategory}
+            onChange={setBusinessCategory}
+            error={errors.businessCategory}
+          />
+        )}
 
         <Input
           label="Phone Number"

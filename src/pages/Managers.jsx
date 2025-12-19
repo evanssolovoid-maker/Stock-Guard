@@ -16,6 +16,7 @@ import Button from '../components/Button'
 import EmptyState from '../components/EmptyState'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../services/supabase'
+import { getBusinessOwnerId } from '../utils/business'
 import { toast } from 'react-hot-toast'
 
 export default function Managers() {
@@ -73,10 +74,18 @@ export default function Managers() {
     
     setLoading(true)
     try {
-      // Get all managers - in single company app, all managers belong to the owner's company
+      // Get business owner ID
+      const businessOwnerId = getBusinessOwnerId(user)
+      
+      if (!businessOwnerId) {
+        throw new Error('Unable to determine business owner')
+      }
+      
+      // Get all managers for this business
       const { data, error } = await supabase
         .from('user_profiles')
         .select('*')
+        .eq('business_owner_id', businessOwnerId)
         .eq('role', 'manager')
         .order('created_at', { ascending: false })
 

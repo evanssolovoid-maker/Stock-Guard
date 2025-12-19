@@ -6,27 +6,20 @@ import Button from './Button'
 import ImageUpload from './ImageUpload'
 import { useProductStore } from '../store/productStore'
 import { useAuth } from '../hooks/useAuth'
+import { useProductCategories } from '../hooks/useProductCategories'
 import { toast } from 'react-hot-toast'
 import { productsService } from '../services/products.service'
-
-const CATEGORIES = [
-  'Electronics',
-  'Clothing',
-  'Food',
-  'Hardware',
-  'Beauty',
-  'Other',
-]
 
 export default function EditProductModal({ isOpen, onClose, product }) {
   const { user } = useAuth()
   const { updateProduct, loadProducts } = useProductStore()
+  const { categories, loading: categoriesLoading } = useProductCategories()
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState({})
 
   const [formData, setFormData] = useState({
     name: '',
-    category: 'Other',
+    category: '',
     price: '',
     quantity: '0',
     imageUrl: null,
@@ -34,15 +27,20 @@ export default function EditProductModal({ isOpen, onClose, product }) {
 
   useEffect(() => {
     if (product) {
+      // Use product's existing category if it exists in available categories, otherwise use first available
+      const validCategory = categories.includes(product.category) 
+        ? product.category 
+        : (categories[0] || 'Other')
+      
       setFormData({
         name: product.name || '',
-        category: product.category || 'Other',
+        category: validCategory,
         price: product.price?.toString() || '',
         quantity: product.quantity?.toString() || '0',
         imageUrl: product.image_url || null,
       })
     }
-  }, [product])
+  }, [product, categories])
 
   const validate = () => {
     const newErrors = {}
@@ -151,22 +149,39 @@ export default function EditProductModal({ isOpen, onClose, product }) {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-            Category
+            Category *
           </label>
-          <select
-            value={formData.category}
-            onChange={(e) =>
-              setFormData({ ...formData, category: e.target.value })
-            }
-            className="input-field"
-            required
-          >
-            {CATEGORIES.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
+          {categoriesLoading ? (
+            <div className="input-field bg-gray-100 dark:bg-slate-700 animate-pulse text-gray-500 dark:text-slate-400">
+              Loading categories...
+            </div>
+          ) : (
+            <select
+              value={formData.category}
+              onChange={(e) =>
+                setFormData({ ...formData, category: e.target.value })
+              }
+              className="input-field"
+              required
+              disabled={categories.length === 0}
+            >
+              {categories.length === 0 ? (
+                <option value="">No categories available</option>
+              ) : (
+                <>
+                  <option value="">Select a category</option>
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </>
+              )}
+            </select>
+          )}
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+            Categories are based on your business type
+          </p>
         </div>
 
         <Input

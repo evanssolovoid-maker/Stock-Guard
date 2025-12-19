@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { getBusinessOwnerId } from "../utils/business";
 
 export const salesService = {
   /**
@@ -9,9 +10,9 @@ export const salesService = {
 
     // Format items for PostgreSQL function
     // Ensure product_id is a string (UUID) and quantity is a number
-    const itemsArray = items.map(item => ({
+    const itemsArray = items.map((item) => ({
       product_id: String(item.productId), // Ensure it's a string UUID
-      quantity: Number(item.quantity) // Ensure it's a number
+      quantity: Number(item.quantity), // Ensure it's a number
     }));
 
     // Call the database function
@@ -19,20 +20,20 @@ export const salesService = {
     const { data, error } = await supabase.rpc("log_multi_item_sale", {
       p_worker_id: workerId,
       p_owner_id: ownerId,
-      p_items: itemsArray // Pass array directly, Supabase handles JSONB conversion
+      p_items: itemsArray, // Pass array directly, Supabase handles JSONB conversion
     });
 
     if (error) {
-      console.error('Multi-item sale error:', error)
-      throw error
+      console.error("Multi-item sale error:", error);
+      throw error;
     }
 
     // Extract sale_id from result
-    const result = Array.isArray(data) ? data[0] : data
-    const saleId = result?.sale_id
+    const result = Array.isArray(data) ? data[0] : data;
+    const saleId = result?.sale_id;
 
     if (!saleId) {
-      throw new Error('Sale ID not returned from database function')
+      throw new Error("Sale ID not returned from database function");
     }
 
     // Fetch the complete sale record with items
@@ -47,7 +48,7 @@ export const salesService = {
       .eq("id", saleId)
       .single();
 
-    if (fetchError) throw fetchError
+    if (fetchError) throw fetchError;
 
     // Fetch sale items with product details
     const { data: saleItems, error: itemsError } = await supabase
@@ -58,14 +59,14 @@ export const salesService = {
         product:products(*)
       `
       )
-      .eq("sale_id", saleId)
+      .eq("sale_id", saleId);
 
-    if (itemsError) throw itemsError
+    if (itemsError) throw itemsError;
 
     return {
       ...sale,
-      items: saleItems || []
-    }
+      items: saleItems || [],
+    };
   },
 
   /**
@@ -114,16 +115,18 @@ export const salesService = {
       .eq("owner_id", ownerId)
       .single();
 
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching owner settings:', error)
-      throw error
+    if (error && error.code !== "PGRST116") {
+      console.error("Error fetching owner settings:", error);
+      throw error;
     }
 
-    return data || {
-      discount_enabled: false,
-      discount_threshold: 0,
-      discount_percentage: 0
-    }
+    return (
+      data || {
+        discount_enabled: false,
+        discount_threshold: 0,
+        discount_percentage: 0,
+      }
+    );
   },
 
   /**
@@ -156,7 +159,8 @@ export const salesService = {
       .order("sale_date", { ascending: false });
 
     if (ownerId) {
-      query = query.eq("owner_id", ownerId);
+      // Use business_owner_id for multi-tenant filtering
+      query = query.eq("business_owner_id", ownerId);
     }
 
     if (workerId) {
@@ -165,15 +169,15 @@ export const salesService = {
 
     if (startDate) {
       // Convert date string to start of day timestamp for proper filtering
-      const start = new Date(startDate)
-      start.setHours(0, 0, 0, 0)
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
       query = query.gte("sale_date", start.toISOString());
     }
 
     if (endDate) {
       // Convert date string to end of day timestamp for proper filtering
-      const end = new Date(endDate)
-      end.setHours(23, 59, 59, 999)
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
       query = query.lte("sale_date", end.toISOString());
     }
 
@@ -186,8 +190,8 @@ export const salesService = {
     // Filter by productId if specified (filter in memory after fetching)
     let filteredData = data || [];
     if (productId && filteredData.length > 0) {
-      filteredData = filteredData.filter(sale => 
-        sale.items?.some(item => item.product_id === productId)
+      filteredData = filteredData.filter((sale) =>
+        sale.items?.some((item) => item.product_id === productId)
       );
     }
 
@@ -206,7 +210,7 @@ export const salesService = {
     const { count, error } = await supabase
       .from("sales")
       .select("*", { count: "exact", head: true })
-      .eq("owner_id", ownerId)
+      .eq("business_owner_id", ownerId)
       .gte("sale_date", today.toISOString())
       .lt("sale_date", tomorrow.toISOString());
 
@@ -226,17 +230,15 @@ export const salesService = {
     const { data, error } = await supabase
       .from("sales")
       .select("final_total")
-      .eq("owner_id", ownerId)
+      .eq("business_owner_id", ownerId)
       .gte("sale_date", today.toISOString())
       .lt("sale_date", tomorrow.toISOString());
 
     if (error) throw error;
 
     const revenue =
-      data?.reduce(
-        (sum, sale) => sum + parseFloat(sale.final_total || 0),
-        0
-      ) || 0;
+      data?.reduce((sum, sale) => sum + parseFloat(sale.final_total || 0), 0) ||
+      0;
     return revenue;
   },
 
@@ -253,17 +255,15 @@ export const salesService = {
     const { data, error } = await supabase
       .from("sales")
       .select("final_total")
-      .eq("owner_id", ownerId)
+      .eq("business_owner_id", ownerId)
       .gte("sale_date", yesterday.toISOString())
       .lt("sale_date", today.toISOString());
 
     if (error) throw error;
 
     const revenue =
-      data?.reduce(
-        (sum, sale) => sum + parseFloat(sale.final_total || 0),
-        0
-      ) || 0;
+      data?.reduce((sum, sale) => sum + parseFloat(sale.final_total || 0), 0) ||
+      0;
     return revenue;
   },
 
@@ -282,19 +282,19 @@ export const salesService = {
         worker:user_profiles!sales_worker_id_fkey(id, username, business_name, phone_number)
       `
       )
-      .eq("owner_id", ownerId);
+      .eq("business_owner_id", ownerId);
 
     if (startDate) {
       // Convert date string to start of day timestamp for proper filtering
-      const start = new Date(startDate)
-      start.setHours(0, 0, 0, 0)
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
       query = query.gte("sale_date", start.toISOString());
     }
 
     if (endDate) {
       // Convert date string to end of day timestamp for proper filtering
-      const end = new Date(endDate)
-      end.setHours(23, 59, 59, 999)
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
       query = query.lte("sale_date", end.toISOString());
     }
 
@@ -327,7 +327,9 @@ export const salesService = {
       );
 
       performance[workerId].totalSales += itemQuantities;
-      performance[workerId].totalRevenue += parseFloat(sale.final_total || itemRevenue);
+      performance[workerId].totalRevenue += parseFloat(
+        sale.final_total || itemRevenue
+      );
     });
 
     return Object.values(performance);
@@ -351,19 +353,19 @@ export const salesService = {
         )
       `
       )
-      .eq("owner_id", ownerId);
+      .eq("business_owner_id", ownerId);
 
     if (startDate) {
       // Convert date string to start of day timestamp for proper filtering
-      const start = new Date(startDate)
-      start.setHours(0, 0, 0, 0)
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
       query = query.gte("sale_date", start.toISOString());
     }
 
     if (endDate) {
       // Convert date string to end of day timestamp for proper filtering
-      const end = new Date(endDate)
-      end.setHours(23, 59, 59, 999)
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
       query = query.lte("sale_date", end.toISOString());
     }
 
@@ -386,7 +388,9 @@ export const salesService = {
           };
         }
 
-        productSales[productId].quantitySold += parseInt(item.quantity_sold || 0);
+        productSales[productId].quantitySold += parseInt(
+          item.quantity_sold || 0
+        );
         productSales[productId].revenue += parseFloat(item.line_total || 0);
       });
     });
@@ -433,31 +437,49 @@ export const salesService = {
   },
 
   /**
-   * Get owner ID for a worker (helper function)
+   * Get business owner ID for a worker/manager (multi-tenant helper function)
    */
   async getOwnerIdForWorker(workerId) {
-    // For single-company setup: find the owner directly (user with role='owner')
-    // In single-company app, all workers/managers belong to the same owner
+    // Get the worker's profile to find their business_owner_id
     const { data, error } = await supabase
       .from("user_profiles")
-      .select("id")
-      .eq("role", "owner")
-      .maybeSingle();
+      .select("business_owner_id, role, id")
+      .eq("id", workerId)
+      .single();
 
     // Handle errors
-    if (error && error.code !== "PGRST116") {
+    if (error) {
       console.error("Error fetching owner ID for worker:", error);
       throw error;
     }
 
-    // If no owner found
-    if (!data || !data.id) {
-      throw new Error(
-        "No business owner found. Please contact your system administrator."
-      );
+    // If worker has business_owner_id, return it
+    if (data?.business_owner_id) {
+      return data.business_owner_id;
     }
 
-    return data.id;
+    // If user is an owner, return their own ID
+    if (data?.role === "owner") {
+      return data.id;
+    }
+
+    // Fallback: try to find owner by business_name (for backward compatibility)
+    if (data?.business_name) {
+      const { data: ownerData } = await supabase
+        .from("user_profiles")
+        .select("id")
+        .eq("business_name", data.business_name)
+        .eq("role", "owner")
+        .maybeSingle();
+
+      if (ownerData?.id) {
+        return ownerData.id;
+      }
+    }
+
+    throw new Error(
+      "No business owner found. Please contact your system administrator."
+    );
   },
 
   /**
@@ -469,19 +491,19 @@ export const salesService = {
     let query = supabase
       .from("sales")
       .select("sale_date, final_total")
-      .eq("owner_id", ownerId);
+      .eq("business_owner_id", ownerId);
 
     if (startDate) {
       // For date strings, ensure we start from the beginning of the day
-      const start = new Date(startDate)
-      start.setHours(0, 0, 0, 0)
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
       query = query.gte("sale_date", start.toISOString());
     }
 
     if (endDate) {
       // For date strings, ensure we include the full day (end of day)
-      const end = new Date(endDate)
-      end.setHours(23, 59, 59, 999)
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
       query = query.lte("sale_date", end.toISOString());
     }
 
@@ -514,19 +536,19 @@ export const salesService = {
     let query = supabase
       .from("sales")
       .select("sale_date, final_total")
-      .eq("owner_id", ownerId);
+      .eq("business_owner_id", ownerId);
 
     if (startDate) {
       // Convert date string to start of day timestamp for proper filtering
-      const start = new Date(startDate)
-      start.setHours(0, 0, 0, 0)
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
       query = query.gte("sale_date", start.toISOString());
     }
 
     if (endDate) {
       // Convert date string to end of day timestamp for proper filtering
-      const end = new Date(endDate)
-      end.setHours(23, 59, 59, 999)
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
       query = query.lte("sale_date", end.toISOString());
     }
 
@@ -559,19 +581,19 @@ export const salesService = {
     let query = supabase
       .from("sales")
       .select("sale_date, final_total")
-      .eq("owner_id", ownerId);
+      .eq("business_owner_id", ownerId);
 
     if (startDate) {
       // Convert date string to start of day timestamp for proper filtering
-      const start = new Date(startDate)
-      start.setHours(0, 0, 0, 0)
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
       query = query.gte("sale_date", start.toISOString());
     }
 
     if (endDate) {
       // Convert date string to end of day timestamp for proper filtering
-      const end = new Date(endDate)
-      end.setHours(23, 59, 59, 999)
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
       query = query.lte("sale_date", end.toISOString());
     }
 
@@ -613,19 +635,19 @@ export const salesService = {
         )
       `
       )
-      .eq("owner_id", ownerId);
+      .eq("business_owner_id", ownerId);
 
     if (startDate) {
       // Convert date string to start of day timestamp for proper filtering
-      const start = new Date(startDate)
-      start.setHours(0, 0, 0, 0)
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
       query = query.gte("sale_date", start.toISOString());
     }
 
     if (endDate) {
       // Convert date string to end of day timestamp for proper filtering
-      const end = new Date(endDate)
-      end.setHours(23, 59, 59, 999)
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
       query = query.lte("sale_date", end.toISOString());
     }
 

@@ -45,7 +45,7 @@ export default function Products() {
   // Load products on mount and when filters change
   useEffect(() => {
     if (user && isOwner) {
-      loadProducts(user.id)
+      loadProducts(user)
     }
   }, [user, isOwner, debouncedSearch, categoryFilter])
 

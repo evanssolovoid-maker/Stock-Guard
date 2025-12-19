@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import ThemeToggle from './ThemeToggle'
 import { Menu, ChevronDown } from 'lucide-react'
@@ -9,8 +9,7 @@ export default function DashboardLayout({ children, title }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const location = useLocation()
-  const navigate = useNavigate()
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
 
   // Get page title from route
   const getPageTitle = () => {
@@ -57,7 +56,7 @@ export default function DashboardLayout({ children, title }) {
                 className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
               >
                 <div className="w-8 h-8 bg-blue-500 dark:bg-purple-500 rounded-full flex items-center justify-center text-white font-medium">
-                  {profile?.business_name?.[0]?.toUpperCase() || profile?.username?.[0]?.toUpperCase() || 'U'}
+                  {profile?.username?.[0]?.toUpperCase() || user?.username?.[0]?.toUpperCase() || 'U'}
                 </div>
                 <ChevronDown className="w-4 h-4 text-gray-600 dark:text-slate-400" />
               </button>
@@ -71,24 +70,13 @@ export default function DashboardLayout({ children, title }) {
                   <div className="absolute right-0 mt-2 w-48 sm:w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg z-20">
                     <div className="p-3 border-b border-gray-200 dark:border-slate-700">
                       <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
-                        {profile?.business_name || profile?.username || 'User'}
+                        {profile?.username || user?.username || 'User'}
                       </p>
-                      {profile?.username && (
+                      {profile?.business_name && (
                         <p className="text-xs text-gray-500 dark:text-slate-400 truncate">
-                          @{profile.username}
+                          {profile.business_name}
                         </p>
                       )}
-                    </div>
-                    <div className="p-1">
-                      <button
-                        onClick={() => {
-                          setProfileMenuOpen(false)
-                          navigate('/settings')
-                        }}
-                        className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 active:bg-gray-200 dark:active:bg-slate-600 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-purple-500 focus:ring-offset-1 touch-manipulation"
-                      >
-                        Settings
-                      </button>
                     </div>
                   </div>
                 </>

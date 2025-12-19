@@ -21,10 +21,10 @@ import {
 } from 'lucide-react'
 
 export default function Landing() {
-  const { user, loading } = useAuth()
+  const { user, profile, loading } = useAuth()
 
-  // Show loading state briefly
-  if (loading) {
+  // Show loading state only briefly - don't block if we have user data
+  if (loading && !user) {
     return (
       <div className="min-h-screen bg-white dark:bg-slate-900 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 dark:border-purple-500"></div>
@@ -32,8 +32,18 @@ export default function Landing() {
     )
   }
 
-  // Redirect to dashboard if logged in
+  // Redirect to appropriate dashboard based on role if logged in
+  // Use user.role immediately if profile not loaded yet
   if (user) {
+    const role = profile?.role || user.role
+    if (role === 'owner') {
+      return <Navigate to="/dashboard" replace />
+    } else if (role === 'manager') {
+      return <Navigate to="/manager-dashboard" replace />
+    } else if (role === 'worker') {
+      return <Navigate to="/log-sale" replace />
+    }
+    // Fallback to dashboard if role is unknown
     return <Navigate to="/dashboard" replace />
   }
 
@@ -407,3 +417,4 @@ export default function Landing() {
     </div>
   )
 }
+

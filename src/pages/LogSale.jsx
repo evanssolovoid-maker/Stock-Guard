@@ -29,29 +29,16 @@ export default function LogSale() {
     const fetchOwnerId = async () => {
       if (!user || !profile) return;
       
-      if (profile.role === 'worker') {
-        try {
-          const id = await salesService.getOwnerIdForWorker(user.id)
-          if (id) {
-            setOwnerId(id)
-            await loadProducts(id)
-            await loadOwnerSettings(id)
-          } else {
-            toast.error('You are not linked to any business. Please contact your business owner.')
-          }
-        } catch (error) {
-          console.error('Error fetching owner ID:', error)
-          toast.error(error.message || 'Failed to load products')
-        }
-      } else if (profile.role === 'owner' || profile.role === 'manager') {
-        setOwnerId(user.id)
-        try {
-          await loadProducts(user.id)
-          await loadOwnerSettings(user.id)
-        } catch (error) {
-          console.error('Error loading products:', error)
-          toast.error('Failed to load products')
-        }
+      // Use user object directly - loadProducts will get business_owner_id internally
+      setOwnerId(user.id) // Keep for backward compatibility
+      try {
+        await loadProducts(user)
+        // Get business owner ID for settings
+        const businessOwnerId = user.business_owner_id || user.id
+        await loadOwnerSettings(businessOwnerId)
+      } catch (error) {
+        console.error('Error loading products:', error)
+        toast.error(error.message || 'Failed to load products')
       }
     }
     fetchOwnerId()
@@ -230,8 +217,8 @@ export default function LogSale() {
     setSaleData(null)
     setAmountGiven('')
     // Reload products to get updated quantities
-    if (ownerId) {
-      loadProducts(ownerId)
+    if (user) {
+      loadProducts(user)
     }
   }
 

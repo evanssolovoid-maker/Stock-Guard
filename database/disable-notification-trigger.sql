@@ -6,3 +6,4 @@ DROP TRIGGER IF EXISTS sale_notification_trigger ON sales;
 -- DROP FUNCTION IF EXISTS notify_owner_on_sale();
 -- Note: Browser notifications will still work as they are handled client-side
 -- SMS and Email notifications require the Railway backend server
+

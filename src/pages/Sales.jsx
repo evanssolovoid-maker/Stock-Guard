@@ -67,13 +67,10 @@ export default function Sales() {
 
   // Subscribe to real-time sales updates (for owners/managers)
   useEffect(() => {
-    if (user && profile && (profile.role === 'owner' || profile.role === 'manager')) {
-      const effectiveOwnerId = profile.role === 'owner' ? user.id : ownerId
-      if (effectiveOwnerId) {
-        subscribeToSales(effectiveOwnerId)
-        return () => {
-          unsubscribeFromSales()
-        }
+    if (user && profile && ownerId) {
+      subscribeToSales(ownerId)
+      return () => {
+        unsubscribeFromSales()
       }
     }
   }, [user, profile, ownerId, subscribeToSales, unsubscribeFromSales])
